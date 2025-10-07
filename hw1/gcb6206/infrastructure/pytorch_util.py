@@ -63,8 +63,11 @@ def build_mlp(
     )
     for _ in range(n_layers - 1):
         model.append(nn.Linear(size, size))
-    raise NotImplementedError
-
+        model.append(activation)
+        
+    model.append(nn.Linear(size, output_size))
+    model.append(output_activation)
+    return model
 
 device = None
 
