@@ -62,12 +62,14 @@ def build_mlp(
         activation
     )
     for _ in range(n_layers - 1):
-        model.append(nn.Linear(size, size))
-        model.append(activation)
-        
-    model.append(nn.Linear(size, output_size))
-    model.append(output_activation)
-    return model
+        layers.append(nn.Linear(size, size))
+        layers.append(activation)
+    
+    # Output layer
+    layers.append(nn.Linear(size, output_size))
+    layers.append(output_activation)
+    
+    return nn.Sequential(*layers)
 
 device = None
 

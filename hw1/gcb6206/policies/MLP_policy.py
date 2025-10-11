@@ -119,13 +119,17 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         else:
             observation = obs[None]
 
-        # TODO return the action that the policy prescribes
-        # HINT 1: DO NOT forget to change the type of observation (to torch tensor).
-        # Take a close look at `infrastructure/pytorch_util.py`.
-        # HINT 2: We would use self.forward function to get the distribution,
-        # And we will sample actions from the distribution.
-        # HINT 3: Return a numpy action, not torch tensor
-        raise NotImplementedError
+        # Convert numpy observation to torch tensor
+        observation = ptu.from_numpy(observation)
+        
+        # Get action distribution from policy network
+        action_distribution = self.forward(observation)
+        
+        # Sample action from the distribution
+        action = action_distribution.sample()
+        
+        # Convert action to numpy array
+        return ptu.to_numpy(action)
 
     def forward(self, observation: torch.FloatTensor) -> Any:
         """
@@ -135,16 +139,14 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         :return:
             action: sampled action(s) from the policy
         """
-        # TODO: implement the forward pass of the network.
-        # You can return anything you want, but you should be able to differentiate
-        # through it.
-        # We are only considering continuous action cases. (we do not need to consider the case where self.discrete is True)
-        # So, we would like to return a normal distirbution from which we can sample actions.
-        # HINT 1: Search up documentation `torch.distributions.Distribution` object
-        # And design the function to return such a distribution object.
-        # HINT 2: In self.get_action and self.update, we will sample from this distribution.
-        # HINT 3: Think about how to convert logstd to regular std.
-        raise NotImplementedError
+        # Get mean from the mean network
+        mean = self.mean_net(observation)
+        
+        # Convert logstd to std by exponentiating
+        std = torch.exp(self.logstd)
+        
+        # Create and return a Normal distribution
+        return distributions.Normal(mean, std)
 
     def update(self, observations, actions):
         """
@@ -155,12 +157,23 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         :return:
             dict: 'Training Loss': supervised learning loss
         """
-        # TODO: update the policy and return the loss
-        # HINT 1: DO NOT forget to call zero_grad to clear gradients from the previous update.
-        # HINT 2: DO NOT forget to change the type of observations and actions, just like get_action.
-        # HINT 3: DO NOT forget to step the optimizer.
-        loss = None
+        # Convert numpy arrays to torch tensors
+        observations = ptu.from_numpy(observations)
+        actions = ptu.from_numpy(actions)
+        
+        # Clear gradients
+        self.optimizer.zero_grad()
+        
+        # Get action distribution
+        action_distribution = self.forward(observations)
+        
+        # Calculate negative log likelihood loss
+        loss = -action_distribution.log_prob(actions).mean()
+        
+        # Backpropagate and update
+        loss.backward()
+        self.optimizer.step()
+        
         return {
-            # You can add extra logging information here, but keep this line
             "Training Loss": ptu.to_numpy(loss),
         }

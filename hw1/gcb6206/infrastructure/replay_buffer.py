@@ -120,16 +120,20 @@ class ReplayBuffer:
             == self.terminals.shape[0]
         )
 
-        ## TODO return batch_size number of random entries
-        ## from each of the 5 component arrays above.
-        ## HINT 1: use np.random.choice to sample random indices.
-        ## Remember not to "replace" when sampling data
-        ## HINT 2: return corresponding data points from each array
-        ## (i.e., not different indices from each array)
-        ## You would use same indices for all arrays.
-        ## HINT 3: look at the sample_recent_data function below
-
-        return None, None, None, None, None
+        # Get total number of transitions in buffer
+        num_transitions = self.obs.shape[0]
+        
+        # Sample random indices without replacement
+        rand_indices = np.random.choice(num_transitions, size=batch_size, replace=False)
+        
+        # Return the sampled transitions using the same indices for all arrays
+        return (
+            self.obs[rand_indices],
+            self.acs[rand_indices],
+            self.rews[rand_indices],
+            self.next_obs[rand_indices],
+            self.terminals[rand_indices]
+        )
 
     def sample_recent_data(self, batch_size=1):
         """
