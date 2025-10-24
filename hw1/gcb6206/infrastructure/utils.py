@@ -45,8 +45,11 @@ def rollout_trajectory(env, policy, max_traj_length, render=False):
 
         # use the most recent ob to decide what to do
         obs.append(ob)
-        # Get action from policy
+        # Get action from policy and ensure correct shape
         ac = policy.get_action(ob)
+        # Remove the batch dimension if present
+        if len(ac.shape) > 1:
+            ac = ac.squeeze(0)
         acs.append(ac)
 
         # take that action and record results
@@ -88,7 +91,7 @@ def rollout_trajectories(
         
         # Add trajectory length to our total timesteps
         timesteps_this_batch += get_trajlength(traj)
-
+                
     return trajs, timesteps_this_batch
 
 

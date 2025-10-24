@@ -50,17 +50,13 @@ def build_mlp(
     if isinstance(output_activation, str):
         output_activation = _str_to_activation[output_activation]
 
-    # TODO: return a MLP. This should be an instance of nn.Module
-    # Note: nn.Sequential is an instance of nn.Module.
-    # HINT 1: Take a look at the following link to see how nn.Sequential works:
-    # https://pytorch.org/docs/stable/generated/torch.nn.Sequential.html
-    # HINT 2: We are only using linear layers and activation layers.
-    # HINT 3: You can simple create a list, append nn layers, and convert with nn.Sequential.
-
-    model = nn.Sequential(
-        nn.Linear(input_size, size),
-        activation
-    )
+    layers = []
+    
+    # Input layer
+    layers.append(nn.Linear(input_size, size))
+    layers.append(activation)
+    
+    # Hidden layers
     for _ in range(n_layers - 1):
         layers.append(nn.Linear(size, size))
         layers.append(activation)

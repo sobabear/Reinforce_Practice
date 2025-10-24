@@ -209,15 +209,34 @@ class BCTrainer:
         # HINT3: you want each of these collected rollouts to be of length self.params['ep_len']
 
         print("\nCollecting data to be used for training...")
-        trajs, envsteps_this_batch = None, None
-        ## TODO: implement the above logic
+        
+        # If it's first iteration and we have expert data, load it
+        if itr == 0 and load_initial_expertdata is not None:
+            with open(load_initial_expertdata, 'rb') as f:
+                trajs = pickle.load(f)
+            return trajs, 0, None
+            
+        # Otherwise collect new trajectories
+        if itr == 0:
+            # First iteration without expert data: collect initial batch
+            batch_size = self.params['batch_size_initial']
+        else:
+            # Subsequent iterations: collect regular batch
+            batch_size = self.params['batch_size']
+            
+        # Collect trajectories
+        trajs, envsteps_this_batch = utils.rollout_trajectories(
+            self.env, collect_policy, batch_size, self.params['ep_len']
+        )
 
         # collect more rollouts with the same policy, to be saved as videos in tensorboard
         # note: here, we collect MAX_NVIDEO rollouts, each of length MAX_VIDEO_LEN
         train_video_trajs = None
         if self.log_video:
             print("\nCollecting train rollouts to be used for saving videos...")
-            ## TODO look in utils and implement rollout_n_trajectories
+            train_video_trajs = utils.rollout_n_trajectories(
+                self.env, collect_policy, MAX_NVIDEO, MAX_VIDEO_LEN, True
+            )
 
         return trajs, envsteps_this_batch, train_video_trajs
 
@@ -231,18 +250,12 @@ class BCTrainer:
             # TODO sample some data from the data buffer
             # HINT1: use the agent's sample function
             # HINT2: how much data = self.params['train_batch_size']
-            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = (
-                None,
-                None,
-                None,
-                None,
-                None,
+            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = self.agent.sample(
+                self.params['train_batch_size']
             )
 
-            # TODO use the sampled data to train an agent
-            # HINT3: use the agent's train function
-            # HINT4: keep the agent's training log for debugging
-            train_log = None
+            # Train the agent using the sampled batch
+            train_log = self.agent.train(ob_batch, ac_batch)
             all_logs.append(train_log)
         return all_logs
 
@@ -257,10 +270,13 @@ class BCTrainer:
             "\nRelabelling collected observations with labels from an expert policy..."
         )
 
-        # TODO relabel collected obsevations (from our policy) with labels from an expert policy
-        # HINT: query the policy (using the get_action function) with trajs[i]["observation"]
-        # and replace trajs[i]["action"] with these expert labels
-
+        # Relabel each trajectory with expert actions
+        for traj in trajs:
+            # Get expert actions for all observations in this trajectory
+            expert_actions = expert_policy.get_action(traj["observation"])
+            # Replace the actions with expert actions
+            traj["action"] = expert_actions
+            
         return trajs
 
     ####################################
