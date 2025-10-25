@@ -146,14 +146,13 @@ class PGAgent(nn.Module):
             # Case 1: in trajectory-based PG, we ignore the timestep and instead use the discounted return for the entire
             # trajectory at each point.
             # In other words: Q(s_t, a_t) = sum_{t'=0}^T gamma^t' r_{t'}
-            # TODO: use the helper function self._discounted_return to calculate the Q-values
-
-            q_values = None
+            # Calculate Q-values using discounted returns for each trajectory
+            q_values = [self._discounted_return(reward) for reward in rewards]
         else:
             # Case 2: in reward-to-go PG, we only use the rewards after timestep t to estimate the Q-value for (s_t, a_t).
             # In other words: Q(s_t, a_t) = sum_{t'=t}^T gamma^(t'-t) * r_{t'}
-            # TODO: use the helper function self._discounted_reward_to_go to calculate the Q-values
-            q_values = None
+            # Calculate Q-values using reward-to-go for each trajectory
+            q_values = [self._discounted_reward_to_go(reward) for reward in rewards]
 
         return q_values
 
@@ -223,9 +222,18 @@ class PGAgent(nn.Module):
         ```
         """
         assert rewards.ndim == 1
-        # TODO: calculate discounted return using the above formula
-        ret = None
-
+        # Calculate discounted return for each timestep
+        T = len(rewards)
+        ret = np.zeros_like(rewards)
+        
+        # For each timestep, sum up all future rewards with discount
+        discounted_sum = 0
+        for t in range(T):
+            discounted_sum += (self.gamma ** t) * rewards[t]
+        
+        # All timesteps get the same value (sum from 0 to T)
+        ret.fill(discounted_sum)
+        
         assert rewards.shape == ret.shape
         return ret
 
@@ -248,9 +256,16 @@ class PGAgent(nn.Module):
         ```
         """
         assert rewards.ndim == 1
-        # TODO: calculate discounted reward to go using the above formula
-        ret = None
-
+        # Calculate reward to go for each timestep
+        T = len(rewards)
+        ret = np.zeros_like(rewards)
+        
+        # Start from the back and accumulate rewards
+        running_sum = 0
+        for t in reversed(range(T)):
+            running_sum = rewards[t] + self.gamma * running_sum
+            ret[t] = running_sum
+            
         assert rewards.shape == ret.shape
         return ret
 
