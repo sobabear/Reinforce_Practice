@@ -27,18 +27,23 @@ def rollout_trajectory(
             image_obs.append(img)
 
         assert ob.ndim == 1
-        # TODO use the most recent ob and the policy to decide what to do
-        ac: np.ndarray = None
+        # Use the policy to get an action
+        ac = policy.get_action(ob)
 
         # check if output action matches the action space
-        assert ac.shape == env.action_space.shape
+        # For discrete actions, we get a single integer
+        if isinstance(env.action_space, gym.spaces.Discrete):
+            assert isinstance(ac, (int, np.integer))
+            assert ac < env.action_space.n
+        else:
+            assert ac.shape == env.action_space.shape
 
-        # TODO: use that action to take a step in the environment
-        next_ob, rew, terminated, truncated, _ = None, None, None, None, None
+        # Take a step in the environment
+        next_ob, rew, terminated, truncated, _ = env.step(ac)
 
-        # TODO rollout can end due to (terminated or truncated), or due to max_length
+        # Rollout can end due to environment termination or max length
         steps += 1
-        rollout_done: bool = None
+        rollout_done = (terminated or truncated) or steps >= max_length
 
         # record result of taking that action
         obs.append(ob)

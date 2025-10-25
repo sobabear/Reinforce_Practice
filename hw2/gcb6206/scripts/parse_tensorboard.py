@@ -16,16 +16,30 @@ def extract_tensorboard_scalars(log_file, scalar_keys):
     if isinstance(scalar_keys, str):
         scalar_keys = [scalar_keys]
 
-    envsteps = [s.value for s in event_acc.Scalars("Train_EnvstepsSoFar")]
+    # Try to use Train_EnvstepsSoFar, but fall back to iteration numbers if not available
+    try:
+        envsteps = [s.value for s in event_acc.Scalars("Train_EnvstepsSoFar")]
+        use_envsteps = True
+    except KeyError:
+        use_envsteps = False
+    
     # Extract the scalar summaries
     scalars = {}
     for tag in scalar_keys:
         scalars_for_tag = event_acc.Scalars(tag)
-        scalars[tag] = {
-            "step": [envsteps[s.step] for s in scalars_for_tag],
-            "wall_time": [s.wall_time for s in scalars_for_tag],
-            "value": [s.value for s in scalars_for_tag],
-        }
+        if use_envsteps:
+            scalars[tag] = {
+                "step": [envsteps[s.step] for s in scalars_for_tag],
+                "wall_time": [s.wall_time for s in scalars_for_tag],
+                "value": [s.value for s in scalars_for_tag],
+            }
+        else:
+            # Use iteration numbers as steps
+            scalars[tag] = {
+                "step": [s.step for s in scalars_for_tag],
+                "wall_time": [s.wall_time for s in scalars_for_tag],
+                "value": [s.value for s in scalars_for_tag],
+            }
 
     return scalars
 
@@ -92,8 +106,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_file", "-o", type=str, default="output_plot.png", required=False
     )
+    parser.add_argument("--list_keys", action="store_true", help="List all available keys in the first log file and exit")
 
     args = parser.parse_args()
+    
+    # If list_keys is specified, just print available keys and exit
+    if args.list_keys:
+        event_acc = EventAccumulator(args.input_log_files[0])
+        event_acc.Reload()
+        print("Available scalar keys in", args.input_log_files[0])
+        print("=" * 60)
+        for key in event_acc.Tags()["scalars"]:
+            print(f"  - {key}")
+        exit(0)
 
     has_names = True
 

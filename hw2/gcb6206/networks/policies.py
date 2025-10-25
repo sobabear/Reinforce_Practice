@@ -55,9 +55,19 @@ class MLPPolicy(nn.Module):
     @torch.no_grad()
     def get_action(self, obs: np.ndarray) -> np.ndarray:
         """Takes a single observation (as a numpy array) and returns a single action (as a numpy array)."""
-        # TODO: implement get_action
-        action = None
-
+        # Convert numpy array to torch tensor
+        obs = ptu.from_numpy(obs)
+        
+        # Get distribution from forward pass
+        dist = self.forward(obs)
+        
+        # Sample action from distribution
+        if self.discrete:
+            # For discrete actions, return the integer directly
+            action = dist.sample().item()
+        else:
+            action = dist.sample().cpu().numpy()
+            
         return action
 
     def forward(self, obs: torch.FloatTensor) -> distributions.Distribution:
@@ -67,13 +77,14 @@ class MLPPolicy(nn.Module):
         flexible objects, such as a `torch.distributions.Distribution` object. It's up to you!
         """
         if self.discrete:
-            # TODO: define the forward pass for a policy with a discrete action space.
-            # HINT: use torch.distributions.Categorical to define the distribution.
-            dist = None
+            # For discrete actions, use Categorical distribution
+            logits = self.logits_net(obs)
+            dist = distributions.Categorical(logits=logits)
         else:
-            # TODO: define the forward pass for a policy with a continuous action space.
-            # HINT: use torch.distributions.Normal to define the distribution.
-            dist = None
+            # For continuous actions, use Normal distribution
+            mean = self.mean_net(obs)
+            std = torch.exp(self.logstd)
+            dist = distributions.Normal(mean, std)
 
         return dist
 
@@ -100,9 +111,26 @@ class MLPPolicyPG(MLPPolicy):
         actions = ptu.from_numpy(actions)
         advantages = ptu.from_numpy(advantages)
 
-        # TODO: implement the policy gradient actor update.
-        # HINT: don't forget to do `self.optimizer.step()`!
-        loss = None
+        # Clear gradients
+        self.optimizer.zero_grad()
+        
+        # Get action distribution
+        dist = self.forward(obs)
+        
+        # Calculate log probabilities
+        log_probs = dist.log_prob(actions)
+        
+        # For discrete actions, log_prob returns shape (batch_size,)
+        # For continuous actions with multiple dimensions, we need to sum across action dimensions
+        if not self.discrete and log_probs.ndim > 1:
+            log_probs = log_probs.sum(dim=-1)
+        
+        # Policy gradient loss: -log_prob * advantage
+        loss = -(log_probs * advantages).mean()
+        
+        # Backpropagate and update
+        loss.backward()
+        self.optimizer.step()
 
         return {
             "Actor Loss": ptu.to_numpy(loss),

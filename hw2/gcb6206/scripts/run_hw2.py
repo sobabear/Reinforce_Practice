@@ -125,6 +125,10 @@ def run_training_loop(args):
                 max_videos_to_save=MAX_NVIDEO,
                 video_title="eval_rollouts",
             )
+    
+    # Final flush to ensure all data is written
+    logger.flush()
+    print("\n********** Training Complete **********")
 
 
 def main():

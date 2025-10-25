@@ -77,28 +77,38 @@ class PGAgent(nn.Module):
         # step 1: calculate Q values of each (s_t, a_t) point, using rewards (r_0, ..., r_t, ..., r_T)
         q_values: Sequence[np.ndarray] = self._calculate_q_vals(rewards)
 
-        # TODO: flatten the lists of arrays into single arrays, so that the rest of the code can be written in a vectorized
-        # way. obs, actions, rewards, terminals, and q_values should all be arrays with a leading dimension of `batch_size`
-        # beyond this point.
-        # HINT: the sum of the lengths of all the arrays is `batch_size`.
+        # Flatten lists of arrays into single arrays
+        obs = np.concatenate(obs)
+        actions = np.concatenate(actions)
+        rewards = np.concatenate(rewards)
+        terminals = np.concatenate(terminals)
+        # q_values is already a numpy array from _calculate_q_vals, so no need to convert
 
         # step 2: calculate advantages from Q values
         assert q_values.ndim == 1
-        advantages: np.ndarray = None
+        advantages = self._estimate_advantage(obs, rewards, q_values, terminals)
 
         assert advantages.ndim == 1
         # step 3: use all datapoints (s_t, a_t, adv_t) to update the PG actor/policy
         if not self.use_ppo:
-            # TODO: normalize the advantages to have a mean of zero and a standard deviation of one within the batch
+            # Normalize the advantages to have mean 0 and std 1
             if self.normalize_advantages:
-                pass
+                advantages = (advantages - np.mean(advantages)) / (np.std(advantages) + 1e-8)
 
-            # TODO: update the PG actor/policy network once using the advantages
-            info: dict = None
+            # Update the PG actor/policy network once using the advantages
+            info = self.actor.update(obs, actions, advantages)
 
             if self.critic is not None:
                 # TODO: update the critic for `baseline_gradient_steps` times
-                critic_info: dict = None
+                critic_info = {}
+                for _ in range(self.baseline_gradient_steps):
+                    critic_update_info = self.critic.update(obs, q_values)
+                    # Average the losses over all gradient steps
+                    for key, value in critic_update_info.items():
+                        if key not in critic_info:
+                            critic_info[key] = value / self.baseline_gradient_steps
+                        else:
+                            critic_info[key] += value / self.baseline_gradient_steps
 
                 info.update(critic_info)
         else:
@@ -146,13 +156,13 @@ class PGAgent(nn.Module):
             # Case 1: in trajectory-based PG, we ignore the timestep and instead use the discounted return for the entire
             # trajectory at each point.
             # In other words: Q(s_t, a_t) = sum_{t'=0}^T gamma^t' r_{t'}
-            # Calculate Q-values using discounted returns for each trajectory
-            q_values = [self._discounted_return(reward) for reward in rewards]
+            # Calculate Q-values using discounted returns for each trajectory and concatenate
+            q_values = np.concatenate([self._discounted_return(reward) for reward in rewards])
         else:
             # Case 2: in reward-to-go PG, we only use the rewards after timestep t to estimate the Q-value for (s_t, a_t).
             # In other words: Q(s_t, a_t) = sum_{t'=t}^T gamma^(t'-t) * r_{t'}
-            # Calculate Q-values using reward-to-go for each trajectory
-            q_values = [self._discounted_reward_to_go(reward) for reward in rewards]
+            # Calculate Q-values using reward-to-go for each trajectory and concatenate
+            q_values = np.concatenate([self._discounted_reward_to_go(reward) for reward in rewards])
 
         return q_values
 
@@ -168,15 +178,15 @@ class PGAgent(nn.Module):
         assert obs.ndim == 2
 
         if self.critic is None:
-            # TODO: if no baseline, then what are the advantages?
-            advantages = None
+            # Without baseline, advantages are just the Q-values
+            advantages = q_values
         else:
             # TODO: run the critic and use it as a baseline
-            values = None
+            values = self.critic(obs).squeeze()
 
             if self.gae_lambda is None:
                 # TODO: if using a baseline, but not GAE, what are the advantages?
-                advantages = None
+                advantages = q_values - values
             else:
                 # TODO: implement GAE
                 batch_size = obs.shape[0]
