@@ -36,7 +36,7 @@ class ValueCritic(nn.Module):
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
         # TODO: implement the forward pass of the critic network
-        return None
+        return self.network(obs)
 
     def update(self, obs: np.ndarray, q_values: np.ndarray) -> dict:
         obs = ptu.from_numpy(obs)
@@ -46,7 +46,17 @@ class ValueCritic(nn.Module):
         assert q_values.ndim == 1
 
         # TODO: update the critic using the observations and q_values
-        loss = None
+        self.optimizer.zero_grad()
+        
+        # Forward pass: predict values
+        predicted_values = self.forward(obs).squeeze()
+        
+        # Mean squared error loss between predicted values and Q-values (targets)
+        loss = F.mse_loss(predicted_values, q_values)
+        
+        # Backward pass and optimization
+        loss.backward()
+        self.optimizer.step()
 
         return {
             "Baseline Loss": ptu.to_numpy(loss),

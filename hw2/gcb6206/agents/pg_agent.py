@@ -182,7 +182,8 @@ class PGAgent(nn.Module):
             advantages = q_values
         else:
             # TODO: run the critic and use it as a baseline
-            values = self.critic(obs).squeeze()
+            obs_tensor = ptu.from_numpy(obs)
+            values = ptu.to_numpy(self.critic(obs_tensor).squeeze())
 
             if self.gae_lambda is None:
                 # TODO: if using a baseline, but not GAE, what are the advantages?
@@ -198,12 +199,17 @@ class PGAgent(nn.Module):
                 # HINT: calculating `deltas` as in the GAE formula first would be useful.
                 # HINT2: handle edge cases by using `terminals`. You can multiply (1 - terminals) to the value of the next state
                 # to handle this.
+                
+                # Calculate TD residuals (delta_t = r_t + gamma * V(s_{t+1}) - V(s_t))
+                # Use (1 - terminals) to zero out V(s_{t+1}) if episode ended
+                deltas = rewards + self.gamma * values[1:] * (1 - terminals) - values[:-1]
 
                 for i in reversed(range(batch_size)):
                     # TODO: recursively compute advantage estimates starting from timestep T.
                     # HINT: use terminals to handle edge cases. terminals[i] is 1 if there isn't a next state in its
                     # trajectory, and 0 otherwise.
-                    pass
+                    # GAE formula: A_t = delta_t + (gamma * lambda) * (1 - terminal_t) * A_{t+1}
+                    advantages[i] = deltas[i] + self.gamma * self.gae_lambda * (1 - terminals[i]) * advantages[i + 1]
 
                 # remove dummy advantage
                 advantages = advantages[:-1]
