@@ -159,6 +159,28 @@ class MLPPolicyPG(MLPPolicy):
         # HINT: calculate logp first, and then caculate ratio and clipped loss.
         # HINT: ratio is the exponential of the difference between logp and old_logp.
         # HINT: You can use torch.clamp to clip values.
-        loss = None
+        
+        self.optimizer.zero_grad()
+        
+        # Get current policy's log probabilities
+        dist = self.forward(obs)
+        logp = dist.log_prob(actions)
+        
+        # For continuous actions, sum over action dimensions
+        if not self.discrete and logp.ndim > 1:
+            logp = logp.sum(dim=-1)
+        
+        # Calculate ratio: π_θ(a|s) / π_θ_old(a|s) = exp(log π_θ - log π_θ_old)
+        ratio = torch.exp(logp - old_logp)
+        
+        # PPO clipped objective
+        surr1 = ratio * advantages
+        surr2 = torch.clamp(ratio, 1 - ppo_cliprange, 1 + ppo_cliprange) * advantages
+        
+        # Loss is negative because we want to maximize
+        loss = -torch.min(surr1, surr2).mean()
+        
+        loss.backward()
+        self.optimizer.step()
 
         return {"PPO Loss": ptu.to_numpy(loss)}

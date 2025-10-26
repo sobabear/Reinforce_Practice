@@ -134,15 +134,22 @@ class PGAgent(nn.Module):
 
                     # TODO: normalize `advantages_slice`` to have a mean of zero and a standard deviation of one within the batch
                     if self.normalize_advantages:
-                        pass
+                        advantages_slice = (advantages_slice - np.mean(advantages_slice)) / (np.std(advantages_slice) + 1e-8)
 
                     # TODO: update the PG actor/policy with PPO objective
                     # HINT: call self.actor.ppo_update
-                    info: dict = None
+                    info = self.actor.ppo_update(obs_slice, actions_slice, advantages_slice, logp_slice, self.ppo_cliprange)
 
             assert self.critic is not None, "PPO requires a critic for calculating GAE."
             # TODO: update the critic for `baseline_gradient_steps` times
-            critic_info: dict = None
+            critic_info = {}
+            for _ in range(self.baseline_gradient_steps):
+                critic_update_info = self.critic.update(obs, q_values)
+                for key, value in critic_update_info.items():
+                    if key not in critic_info:
+                        critic_info[key] = value / self.baseline_gradient_steps
+                    else:
+                        critic_info[key] += value / self.baseline_gradient_steps
 
             info.update(critic_info)
         return info
@@ -297,7 +304,22 @@ class PGAgent(nn.Module):
         assert obs.ndim == 2
         # TODO: calculate the log probabilities
         # HINT: self.actor outputs a distribution object, which has a method log_prob that takes in the actions
-        logp = None
+        
+        obs_tensor = ptu.from_numpy(obs)
+        actions_tensor = ptu.from_numpy(actions)
+        
+        # Get distribution from actor
+        dist = self.actor.forward(obs_tensor)
+        
+        # Calculate log probabilities
+        logp_tensor = dist.log_prob(actions_tensor)
+        
+        # For continuous actions, sum over action dimensions
+        if not self.actor.discrete and logp_tensor.ndim > 1:
+            logp_tensor = logp_tensor.sum(dim=-1)
+        
+        # Convert to numpy
+        logp = ptu.to_numpy(logp_tensor)
 
         assert logp.ndim == 1 and logp.shape[0] == obs.shape[0]
         return logp
